@@ -1,0 +1,136 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Download } from "lucide-react";
+import { prisma } from "@repo/db";
+import { auth } from "@/lib/auth";
+import { getUserPlan } from "@/lib/usage";
+import { PLANS } from "@/lib/plans";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/dashboard/status-badge";
+import { AutoRefresh } from "./auto-refresh";
+import { formatDate, formatDuration } from "@/lib/utils";
+
+interface Segment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export default async function TranscriptionPage({ params }: { params: { id: string } }) {
+  const session = await auth();
+  const transcription = await prisma.transcription.findFirst({
+    where: { id: params.id, userId: session!.user.id },
+  });
+  if (!transcription) notFound();
+
+  const plan = await getUserPlan(session!.user.id);
+  const formats = PLANS[plan].exportFormats.filter((f) =>
+    ["TXT", "SRT", "VTT"].includes(f)
+  );
+
+  const inProgress = ["PENDING", "DOWNLOADING", "PROCESSING"].includes(transcription.status);
+  const segments = (transcription.segments as unknown as Segment[] | null) ?? [];
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      {inProgress && <AutoRefresh />}
+
+      <div>
+        <Link
+          href="/dashboard/history"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden /> К истории
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="break-all text-2xl font-bold">{transcription.title}</h1>
+          <StatusBadge status={transcription.status} />
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {formatDate(transcription.createdAt)}
+          {transcription.durationSec ? ` · ${formatDuration(transcription.durationSec)}` : ""}
+          {transcription.language && transcription.language !== "auto"
+            ? ` · ${transcription.language.toUpperCase()}`
+            : ""}
+        </p>
+      </div>
+
+      {inProgress && (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <div className="mx-auto h-2 max-w-sm overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full animate-pulse rounded-full bg-primary transition-all"
+                style={{ width: `${Math.max(5, transcription.progress)}%` }}
+              />
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {transcription.status === "PENDING" && "Ожидает в очереди…"}
+              {transcription.status === "DOWNLOADING" && "Скачиваем исходник…"}
+              {transcription.status === "PROCESSING" &&
+                `Распознаём речь… ${transcription.progress}%`}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Страница обновится автоматически.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {transcription.status === "FAILED" && (
+        <Card className="border-destructive/50">
+          <CardContent className="py-6">
+            <p className="font-medium text-destructive">Не удалось обработать запись</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {transcription.error ?? "Неизвестная ошибка. Попробуйте загрузить файл ещё раз."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {transcription.status === "COMPLETED" && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {formats.map((format) => (
+              <a
+                key={format}
+                href={`/api/transcriptions/${transcription.id}/export?format=${format.toLowerCase()}`}
+                download
+              >
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4" aria-hidden />
+                  {format}
+                </Button>
+              </a>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Текст</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {segments.length > 0 ? (
+                <div className="space-y-3">
+                  {segments.map((segment, i) => (
+                    <div key={i} className="flex gap-3">
+                      <span className="shrink-0 pt-0.5 font-mono text-xs text-primary">
+                        {formatDuration(segment.start)}
+                      </span>
+                      <p className="text-sm leading-relaxed">{segment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {transcription.text ?? "Текст недоступен."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+build/
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Prisma
+packages/db/prisma/*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Media / temp
+tmp/
+uploads/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
