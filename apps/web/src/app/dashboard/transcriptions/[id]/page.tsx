@@ -25,9 +25,9 @@ export default async function TranscriptionPage({ params }: { params: { id: stri
   if (!transcription) notFound();
 
   const plan = await getUserPlan(session!.user.id);
-  const formats = PLANS[plan].exportFormats.filter((f) =>
-    ["TXT", "SRT", "VTT"].includes(f)
-  );
+  const FORMAT_ORDER = ["TXT", "DOCX", "PDF", "SRT", "VTT"];
+  const planFormats = PLANS[plan].exportFormats;
+  const formats = FORMAT_ORDER.filter((f) => planFormats.includes(f));
 
   const inProgress = ["PENDING", "DOWNLOADING", "PROCESSING"].includes(transcription.status);
   const segments = (transcription.segments as unknown as Segment[] | null) ?? [];
