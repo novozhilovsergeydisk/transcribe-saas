@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { prisma } from "@repo/db";
+import { subscriptions, users } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,12 +12,10 @@ export const metadata: Metadata = { title: "Настройки" };
 
 export default async function SettingsPage() {
   const session = await auth();
-  const user = await prisma.user.findUnique({
-    where: { id: session!.user.id },
-    include: { subscription: true },
-  });
+  const user = await users.findById(session!.user.id);
+  const subscription = user ? await subscriptions.findByUserId(user.id) : null;
 
-  const plan = PLANS[user?.subscription?.plan ?? "FREE"];
+  const plan = PLANS[subscription?.plan ?? "FREE"];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

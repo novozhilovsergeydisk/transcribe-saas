@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@repo/db";
+import { transcriptions, type TranscriptionStatus } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { enqueueTranscription } from "@/lib/queue";
 import { getRemainingSeconds, getUserPlan } from "@/lib/usage";
@@ -45,16 +45,14 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
-  const transcription = await prisma.transcription.create({
-    data: {
-      userId: session.user.id,
-      title: data.title,
-      source: data.source,
-      language: data.language,
-      ...(data.source === "UPLOAD"
-        ? { fileKey: data.fileKey, mimeType: data.mimeType, fileSize: data.fileSize }
-        : { sourceUrl: data.sourceUrl }),
-    },
+  const transcription = await transcriptions.create({
+    userId: session.user.id,
+    title: data.title,
+    source: data.source,
+    language: data.language,
+    ...(data.source === "UPLOAD"
+      ? { fileKey: data.fileKey, mimeType: data.mimeType, fileSize: data.fileSize }
+      : { sourceUrl: data.sourceUrl }),
   });
 
   const plan = await getUserPlan(session.user.id);
@@ -75,31 +73,17 @@ export async function GET(request: Request) {
   const query = searchParams.get("q")?.trim();
   const status = searchParams.get("status");
 
-  const where = {
+  const filter = {
     userId: session.user.id,
-    ...(query ? { title: { contains: query, mode: "insensitive" as const } } : {}),
-    ...(status && status !== "ALL" ? { status: status as never } : {}),
+    query: query || undefined,
+    status: status && status !== "ALL" ? (status as TranscriptionStatus) : undefined,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   };
 
   const [items, total] = await Promise.all([
-    prisma.transcription.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        title: true,
-        source: true,
-        status: true,
-        progress: true,
-        durationSec: true,
-        language: true,
-        createdAt: true,
-        completedAt: true,
-      },
-    }),
-    prisma.transcription.count({ where }),
+    transcriptions.list(filter),
+    transcriptions.count(filter),
   ]);
 
   return NextResponse.json({ items, total, page, pageSize });

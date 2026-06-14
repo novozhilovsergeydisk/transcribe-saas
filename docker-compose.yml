@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: transcription
       POSTGRES_PASSWORD: transcription
-      POSTGRES_DB: transcription
+      POSTGRES_DB: transcribe_saas
     ports:
       - "5432:5432"
     volumes:
@@ -67,7 +67,11 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://transcription:transcription@postgres:5432/transcription
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: transcribe_saas
+      DB_USERNAME: transcription
+      DB_PASSWORD: transcription
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
     ports:
@@ -86,7 +90,11 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://transcription:transcription@postgres:5432/transcription
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: transcribe_saas
+      DB_USERNAME: transcription
+      DB_PASSWORD: transcription
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
     depends_on:

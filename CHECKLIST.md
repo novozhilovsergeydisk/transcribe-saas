@@ -11,7 +11,9 @@
 ### Инфраструктура и монорепо
 - [x] Монорепо pnpm-workspace (`apps/web`, `apps/worker`, `packages/db`, `services/transcription`)
 - [x] Docker Compose: PostgreSQL, Redis, MinIO (+ профиль `app` для web/worker)
-- [x] Prisma-схема и клиент `@repo/db`, seed демо-пользователя
+- [x] Нативный SQL-слой `@repo/db` (пул `pg`, репозитории, своя система миграций
+      `packages/db/migrations` + раннер), seed демо-пользователя. **Prisma удалён** —
+      работаем на чистом SQL. БД проекта: `transcribe_saas` (UTF8, локаль `ru_RU.UTF-8`)
 
 ### Аутентификация
 - [x] NextAuth.js (`apps/web/src/lib/auth.ts`)

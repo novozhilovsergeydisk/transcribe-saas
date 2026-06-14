@@ -2,7 +2,7 @@
 const nextConfig = {
   transpilePackages: ["@repo/db"],
   experimental: {
-    serverComponentsExternalPackages: ["@prisma/client", "bullmq", "ioredis"],
+    serverComponentsExternalPackages: ["pg", "bullmq", "ioredis"],
   },
 };
 

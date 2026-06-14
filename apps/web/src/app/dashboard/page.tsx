@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Clock, Loader2, FileText, Plus } from "lucide-react";
-import { prisma } from "@repo/db";
+import { transcriptions } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { getUsageSeconds, getUserPlan } from "@/lib/usage";
 import { PLANS } from "@/lib/plans";
@@ -17,21 +17,11 @@ export default async function DashboardPage() {
   const [plan, usedSeconds, activeCount, recent] = await Promise.all([
     getUserPlan(userId),
     getUsageSeconds(userId),
-    prisma.transcription.count({
-      where: { userId, status: { in: ["PENDING", "DOWNLOADING", "PROCESSING"] } },
+    transcriptions.count({
+      userId,
+      statuses: ["PENDING", "DOWNLOADING", "PROCESSING"],
     }),
-    prisma.transcription.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        durationSec: true,
-        createdAt: true,
-      },
-    }),
+    transcriptions.list({ userId, take: 5 }),
   ]);
 
   const planConfig = PLANS[plan];

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@repo/db";
+import { transcriptions } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { getUserPlan } from "@/lib/usage";
 import { PLANS } from "@/lib/plans";
-import { buildExport, type Segment } from "@/lib/export-formats";
+import { buildExport } from "@/lib/export-formats";
 
 export const runtime = "nodejs";
 
@@ -13,9 +13,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
   }
 
-  const transcription = await prisma.transcription.findFirst({
-    where: { id: params.id, userId: session.user.id },
-  });
+  const transcription = await transcriptions.findOwned(params.id, session.user.id);
   if (!transcription || transcription.status !== "COMPLETED") {
     return NextResponse.json({ error: "Транскрипция не готова" }, { status: 404 });
   }
@@ -32,7 +30,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     );
   }
 
-  const segments = (transcription.segments as unknown as Segment[] | null) ?? [];
+  const segments = transcription.segments ?? [];
   const baseName = transcription.title.replace(/\.[^.]+$/, "").slice(0, 80) || "transcription";
 
   const { body, contentType, ext, binary } = await buildExport(format, {

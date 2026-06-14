@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src", "prisma/seed.ts"]
+  "include": ["src"]
 }

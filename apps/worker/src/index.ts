@@ -1,9 +1,12 @@
 import { Worker, type Job } from "bullmq";
-import { prisma, Prisma } from "@repo/db";
+import { closePool, loadEnv, transcriptions } from "@repo/db";
 import { redisConnectionOptions } from "./redis.js";
 import { downloadFromS3, downloadFromUrl, cleanupDir } from "./media.js";
 import { runWhisper } from "./whisper.js";
 import { addUsage } from "./usage.js";
+
+// Раньше .env подхватывался как побочный эффект Prisma; теперь грузим явно.
+loadEnv();
 
 interface TranscriptionJobData {
   transcriptionId: string;
@@ -14,9 +17,7 @@ const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY ?? 1);
 async function processJob(job: Job<TranscriptionJobData>) {
   const { transcriptionId } = job.data;
 
-  const transcription = await prisma.transcription.findUnique({
-    where: { id: transcriptionId },
-  });
+  const transcription = await transcriptions.findById(transcriptionId);
   if (!transcription) {
     console.warn(`[${transcriptionId}] запись не найдена, пропускаю`);
     return;
@@ -26,9 +27,10 @@ async function processJob(job: Job<TranscriptionJobData>) {
 
   try {
     // 1. Получаем исходный файл
-    await prisma.transcription.update({
-      where: { id: transcriptionId },
-      data: { status: "DOWNLOADING", progress: 0, error: null },
+    await transcriptions.update(transcriptionId, {
+      status: "DOWNLOADING",
+      progress: 0,
+      error: null,
     });
 
     let inputPath: string;
@@ -41,35 +43,26 @@ async function processJob(job: Job<TranscriptionJobData>) {
     }
 
     // 2. Распознаём речь
-    await prisma.transcription.update({
-      where: { id: transcriptionId },
-      data: { status: "PROCESSING", progress: 5 },
-    });
+    await transcriptions.update(transcriptionId, { status: "PROCESSING", progress: 5 });
 
     const result = await runWhisper(inputPath, {
       language: transcription.language ?? "auto",
       onProgress: async (percent) => {
-        await prisma.transcription
-          .update({
-            where: { id: transcriptionId },
-            data: { progress: Math.min(99, percent) },
-          })
+        await transcriptions
+          .update(transcriptionId, { progress: Math.min(99, percent) })
           .catch(() => {});
       },
     });
 
     // 3. Сохраняем результат и списываем минуты
-    await prisma.transcription.update({
-      where: { id: transcriptionId },
-      data: {
-        status: "COMPLETED",
-        progress: 100,
-        text: result.text,
-        segments: result.segments as unknown as Prisma.InputJsonValue,
-        durationSec: result.duration,
-        language: result.language,
-        completedAt: new Date(),
-      },
+    await transcriptions.update(transcriptionId, {
+      status: "COMPLETED",
+      progress: 100,
+      text: result.text,
+      segments: result.segments,
+      durationSec: result.duration,
+      language: result.language,
+      completedAt: new Date(),
     });
 
     await addUsage(transcription.userId, result.duration);
@@ -77,9 +70,9 @@ async function processJob(job: Job<TranscriptionJobData>) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[${transcriptionId}] ошибка:`, message);
-    await prisma.transcription.update({
-      where: { id: transcriptionId },
-      data: { status: "FAILED", error: message.slice(0, 1000) },
+    await transcriptions.update(transcriptionId, {
+      status: "FAILED",
+      error: message.slice(0, 1000),
     });
     throw error; // даём BullMQ возможность повторить попытку
   } finally {
@@ -100,7 +93,7 @@ worker.on("failed", (job, err) =>
 async function shutdown() {
   console.log("Останавливаю воркер…");
   await worker.close();
-  await prisma.$disconnect();
+  await closePool();
   process.exit(0);
 }
 

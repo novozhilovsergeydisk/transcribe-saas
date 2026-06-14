@@ -13,7 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY . .
-RUN pnpm --filter @repo/db generate && pnpm --filter web build
+RUN pnpm --filter web build
 
 FROM base AS runner
 ENV NODE_ENV=production

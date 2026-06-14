@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { prisma, type TranscriptionStatus } from "@repo/db";
+import { transcriptions, type TranscriptionStatus } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,28 +31,17 @@ export default async function HistoryPage({
   const query = searchParams.q?.trim() ?? "";
   const status = searchParams.status ?? "ALL";
 
-  const where = {
+  const filter = {
     userId,
-    ...(query ? { title: { contains: query, mode: "insensitive" as const } } : {}),
-    ...(status !== "ALL" ? { status: status as TranscriptionStatus } : {}),
+    query: query || undefined,
+    status: status !== "ALL" ? (status as TranscriptionStatus) : undefined,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
   };
 
   const [items, total] = await Promise.all([
-    prisma.transcription.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        title: true,
-        source: true,
-        status: true,
-        durationSec: true,
-        createdAt: true,
-      },
-    }),
-    prisma.transcription.count({ where }),
+    transcriptions.list(filter),
+    transcriptions.count(filter),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

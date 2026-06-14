@@ -1,4 +1,4 @@
-import { prisma, type PlanType } from "@repo/db";
+import { subscriptions, usageRecords, type PlanType } from "@repo/db";
 import { getPlanLimitSeconds } from "@/lib/plans";
 
 function currentPeriod(): { periodStart: Date; periodEnd: Date } {
@@ -9,15 +9,13 @@ function currentPeriod(): { periodStart: Date; periodEnd: Date } {
 }
 
 export async function getUserPlan(userId: string): Promise<PlanType> {
-  const subscription = await prisma.subscription.findUnique({ where: { userId } });
+  const subscription = await subscriptions.findByUserId(userId);
   return subscription?.plan ?? "FREE";
 }
 
 export async function getUsageSeconds(userId: string): Promise<number> {
   const { periodStart } = currentPeriod();
-  const record = await prisma.usageRecord.findUnique({
-    where: { userId_periodStart: { userId, periodStart } },
-  });
+  const record = await usageRecords.find(userId, periodStart);
   return record?.secondsUsed ?? 0;
 }
 
@@ -32,9 +30,5 @@ export async function getRemainingSeconds(userId: string): Promise<number | null
 
 export async function addUsage(userId: string, seconds: number): Promise<void> {
   const { periodStart, periodEnd } = currentPeriod();
-  await prisma.usageRecord.upsert({
-    where: { userId_periodStart: { userId, periodStart } },
-    create: { userId, periodStart, periodEnd, secondsUsed: Math.ceil(seconds) },
-    update: { secondsUsed: { increment: Math.ceil(seconds) } },
-  });
+  await usageRecords.addSeconds(userId, periodStart, periodEnd, seconds);
 }

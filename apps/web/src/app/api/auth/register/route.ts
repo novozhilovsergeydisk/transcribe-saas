@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@repo/db";
+import { subscriptions, users } from "@repo/db";
 
 const registerSchema = z.object({
   name: z.string().trim().min(2, "Укажите имя").max(100),
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   const { name, email, password } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await users.findByEmail(email);
   if (existing) {
     return NextResponse.json(
       { error: "Пользователь с таким email уже зарегистрирован" },
@@ -42,16 +42,14 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash: await hash(password, 10),
-      privacyAcceptedAt: now,
-      personalDataAcceptedAt: now,
-      subscription: { create: { plan: "FREE" } },
-    },
+  const user = await users.create({
+    name,
+    email,
+    passwordHash: await hash(password, 10),
+    privacyAcceptedAt: now,
+    personalDataAcceptedAt: now,
   });
+  await subscriptions.ensureFree(user.id);
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

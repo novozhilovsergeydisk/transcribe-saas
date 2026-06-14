@@ -6,7 +6,7 @@ SaaS-платформа для транскрибации аудио и виде
 ## Стек
 
 - **Frontend:** Next.js 14 (App Router), TypeScript, Tailwind CSS, Framer Motion, next-themes
-- **Backend:** PostgreSQL + Prisma, NextAuth.js, Redis + BullMQ
+- **Backend:** PostgreSQL (нативный SQL через `pg`, своя система миграций), NextAuth.js, Redis + BullMQ
 - **Транскрибация:** faster-whisper (локально), yt-dlp, FFmpeg
 - **Инфраструктура:** Docker Compose, MinIO (S3)
 
@@ -17,7 +17,7 @@ SaaS-платформа для транскрибации аудио и виде
 │   ├── web/        # Next.js приложение (лендинг + кабинет + API)
 │   └── worker/     # BullMQ-воркер фоновой транскрибации
 ├── packages/
-│   └── db/         # Prisma-схема и клиент (@repo/db)
+│   └── db/         # Нативный SQL-слой: пул pg, репозитории, миграции (@repo/db)
 ├── services/
 │   └── transcription/  # Python-скрипт faster-whisper
 └── docker-compose.yml  # postgres, redis, minio (+ web/worker по профилю app)
@@ -35,11 +35,15 @@ pnpm install
 cp .env.example .env
 # при необходимости поправьте значения; для локалки дефолты уже рабочие
 
-# 3. Инфраструктура (PostgreSQL, Redis, MinIO + бакет)
+# 3. Инфраструктура: PostgreSQL, Redis, MinIO
+#    вариант А — через Docker:
 docker compose up -d postgres redis minio minio-init
+#    вариант Б — нативный PostgreSQL: создайте БД и пропишите DB_* в .env, напр.:
+#    createdb -E UTF8 --locale=ru_RU.UTF-8 -T template0 transcribe_saas
+#    (локаль ru_RU.UTF-8 нужна для регистронезависимого поиска по кириллице)
 
-# 4. База данных
-pnpm db:migrate     # создаст и применит миграции
+# 4. База данных (своя система миграций)
+pnpm db:migrate     # применит SQL-миграции из packages/db/migrations
 pnpm db:seed        # демо-пользователь demo@example.com / demo1234
 
 # 5. Python-зависимости воркера
@@ -50,10 +54,9 @@ pnpm dev            # web на http://localhost:3000
 pnpm dev:worker     # воркер транскрибации
 ```
 
-> Все пакеты используют один файл `.env` в корне репозитория. `apps/web/.env.local` и
-> `packages/db/.env` — симлинки на него, поэтому `pnpm dev`, `pnpm db:migrate` и `pnpm db:seed`
-> читают переменные в любом терминале. Если симлинки потерялись, пересоздайте их из корня:
-> `ln -sf ../../.env apps/web/.env.local && ln -sf ../../.env packages/db/.env`
+> Все пакеты используют один файл `.env` в корне репозитория. `apps/web/.env.local` — симлинк
+> на него (его читает Next). Скрипты `db:migrate`/`db:seed` и воркер сами ищут ближайший `.env`
+> вверх по дереву. Если симлинк потерялся: `ln -sf ../../.env apps/web/.env.local`
 
 ## Запуск в Docker целиком
 
@@ -69,8 +72,8 @@ docker compose --profile app up --build
 | `pnpm dev:worker` | воркер с hot-reload |
 | `pnpm build` | сборка всех пакетов |
 | `pnpm typecheck` | проверка типов во всех пакетах |
-| `pnpm db:migrate` | миграции Prisma (dev) |
-| `pnpm db:studio` | Prisma Studio |
+| `pnpm db:migrate` | применить SQL-миграции (`packages/db/migrations`) |
+| `pnpm db:seed` | демо-данные (demo@example.com / demo1234) |
 
 ## Как устроена транскрибация
 

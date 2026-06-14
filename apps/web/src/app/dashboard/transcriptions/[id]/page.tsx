@@ -1,27 +1,20 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
-import { prisma } from "@repo/db";
+import { transcriptions } from "@repo/db";
 import { auth } from "@/lib/auth";
 import { getUserPlan } from "@/lib/usage";
 import { PLANS } from "@/lib/plans";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { AutoRefresh } from "./auto-refresh";
+import { TranscriptEditor } from "./transcript-editor";
 import { formatDate, formatDuration } from "@/lib/utils";
-
-interface Segment {
-  start: number;
-  end: number;
-  text: string;
-}
 
 export default async function TranscriptionPage({ params }: { params: { id: string } }) {
   const session = await auth();
-  const transcription = await prisma.transcription.findFirst({
-    where: { id: params.id, userId: session!.user.id },
-  });
+  const transcription = await transcriptions.findOwned(params.id, session!.user.id);
   if (!transcription) notFound();
 
   const plan = await getUserPlan(session!.user.id);
@@ -30,7 +23,8 @@ export default async function TranscriptionPage({ params }: { params: { id: stri
   const formats = FORMAT_ORDER.filter((f) => planFormats.includes(f));
 
   const inProgress = ["PENDING", "DOWNLOADING", "PROCESSING"].includes(transcription.status);
-  const segments = (transcription.segments as unknown as Segment[] | null) ?? [];
+  const segments = transcription.segments ?? [];
+  const audioAvailable = transcription.source === "UPLOAD" && !!transcription.fileKey;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -106,29 +100,12 @@ export default async function TranscriptionPage({ params }: { params: { id: stri
             ))}
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Текст</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {segments.length > 0 ? (
-                <div className="space-y-3">
-                  {segments.map((segment, i) => (
-                    <div key={i} className="flex gap-3">
-                      <span className="shrink-0 pt-0.5 font-mono text-xs text-primary">
-                        {formatDuration(segment.start)}
-                      </span>
-                      <p className="text-sm leading-relaxed">{segment.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {transcription.text ?? "Текст недоступен."}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <TranscriptEditor
+            transcriptionId={transcription.id}
+            initialSegments={segments}
+            initialText={transcription.text ?? ""}
+            audioAvailable={audioAvailable}
+          />
         </>
       )}
     </div>
